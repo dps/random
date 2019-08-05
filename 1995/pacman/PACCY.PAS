@@ -5,6 +5,11 @@ type
 	Screen256 = ARRAY[0..199] OF ARRAY[0..319] OF Byte;
         Pal = Array[0..767] of byte;
         Sprite = Array[0..3] of Array[0..19] of Array[0..19] of Byte;
+        Bady = record
+           sx,sy,xx,yy,ox,oy:integer;
+           blinky : boolean;
+        end;
+
         Cursor = record
         	C : Array[0..15] of Word;
                 M : Array[0..15] of Word;
@@ -14,8 +19,9 @@ var
         Level : Array[0..16] of Array[0..9] of Char;
         Pills : Array[0..16] of Array[0..19] of Char;
 	Prefs : Array[0..4] of Byte;
-        NoPills : integer;
-
+        NoPills,numbad : integer;
+        bad : array[1..10] of bady;
+        s : array[0..255,1..3] of byte;
 Procedure Vwait;
 begin
 asm
@@ -116,8 +122,11 @@ begin
 
 	BlockRead(fi,PaletteBuf,768);
         for l:=0 to 767 do
+            begin
         	PaletteBuf[l]:=PaletteBuf[l] SHR 2;
-        SetPalette(PaletteBuf);
+            s[l div 3,(l mod 3)+1]:=PaletteBuf[l];
+            end;
+
         BlockRead(fi,Ptr($A000,0000)^,64000);
         close(fi);
 end;
@@ -297,6 +306,11 @@ begin
                         if r='@' then PutSprnr(p,m*20,n*20,2);
                 end;
        end;
+   readln(lev,numbad);
+   for n:=1 to numbad do
+   begin
+   readln(lev,bad[n].sx,bad[n].sy);
+   end;
    close(lev);
 end;
 
@@ -438,6 +452,145 @@ begin
 end;
 
 
+Procedure GetPal(ColorNo : Byte; Var R,G,B : Byte);
+Begin
+   Port[$3c7] := ColorNo;
+   R := Port[$3c9];
+   G := Port[$3c9];
+   B := Port[$3c9];
+End;
+
+
+
+Procedure SPal(ColorNo : Byte; R,G,B : Byte);
+Begin
+   Port[$3c8] := ColorNo;
+   Port[$3c9] := R;
+   Port[$3c9] := G;
+   Port[$3c9] := B;
+End;
+
+
+
+Procedure FadeDown;
+VAR loop1,loop2:integer;
+    Tmp : Array [1..3] of byte;
+
+BEGIN
+  For loop1:=1 to 64 do BEGIN
+    Vwait;
+    For loop2:=1 to 255 do BEGIN
+      Getpal (loop2,Tmp[1],Tmp[2],Tmp[3]);
+      If Tmp[1]>0 then dec (Tmp[1]);
+      If Tmp[2]>0 then dec (Tmp[2]);
+      If Tmp[3]>0 then dec (Tmp[3]);
+
+      SPal (loop2,Tmp[1],Tmp[2],Tmp[3]);
+    END;
+  END;
+END;
+
+procedure Scrollup;
+var
+ line,l,d,e : integer;
+
+begin
+ for l:=0 to 9 do
+ begin
+
+
+    if l mod 2=1 then
+    begin
+     for d:=1 to 64 do begin
+    for e:=l*20 to l*20+20 do
+     begin
+     Mem[$A000:(e*320)+319]:=0;
+     Mem[$A000:(e*320)+318]:=0;
+     Mem[$A000:(e*320)+317]:=0;
+     Mem[$A000:(e*320)+316]:=0;
+     Mem[$A000:(e*320)+315]:=0;
+     end;
+    Vwait;
+    for line:=l*20 to (l*20)+20 do
+    Move(mem[$A000:line*320+5],mem[$A000:line*320],320);end;
+    end
+    else
+     for d:=1 to 64 do begin
+    for e:=l*20 to l*20+20 do
+     begin
+     Mem[$A000:(e*320)]:=0;
+     Mem[$A000:(e*320)+1]:=0;
+     Mem[$A000:(e*320)+2]:=0;
+     Mem[$A000:(e*320)+3]:=0;
+     Mem[$A000:(e*320)+4]:=0;
+     Mem[$A000:(e*320)+5]:=0;
+     end;
+    Vwait;
+    for line:=l*20 to (l*20)+20 do
+    Move(mem[$A000:line*320-5],mem[$A000:line*320],320);end;
+    end;
+ end;
+
+
+Procedure InitFadeUp;
+var
+ loop : integer;
+begin
+ for loop := 0 to 255 do
+    Getpal(loop,s[loop,1],s[loop,2],s[loop,3]);
+ for loop := 0 to 255 do
+    SPal(loop,0,0,0);
+end;
+
+Procedure InFUp;
+var
+ loop : integer;
+begin
+ for loop := 0 to 255 do
+    Getpal(loop,s[loop,1],s[loop,2],s[loop,3]);
+end;
+
+Procedure FadeUp;
+var
+ store : array[0..255,1..3] of byte;
+ r,g,b,col : byte;
+ loop,l2 : integer;
+begin
+ col:=0;
+ for loop := 0 to 255 do
+    Getpal(loop,store[loop,1],store[loop,2],store[loop,3]);
+ for loop := 1 to 64 do
+  begin
+    for l2:=0 to 255 do
+     begin
+      if store[l2,1]<(s[l2,1]-1) then inc(store[l2,1],2);
+      if store[l2,2]<(s[l2,2]-1) then inc(store[l2,2],2);
+      if store[l2,3]<(s[l2,3]-1) then inc(store[l2,3],2);
+     end;
+     Vwait;
+     for l2:=0 to 63 do
+       Spal(l2,store[l2,1],store[l2,2],store[l2,3]);
+     Vwait;
+     for l2:=63 to 127 do
+       Spal(l2,store[l2,1],store[l2,2],store[l2,3]);
+     Vwait;
+     for l2:=64 to 191 do
+       Spal(l2,store[l2,1],store[l2,2],store[l2,3]);
+     Vwait;
+     for l2:=192 to 255 do
+       Spal(l2,store[l2,1],store[l2,2],store[l2,3]);
+    end;
+   
+end;
+  
+ {Move(mem[$A000:3200],mem[$A000:0],60800);
+ fillchar(Mem[$A000:60800],3200,0);
+ for line:=2 to 20 do
+ begin
+ Move(mem[$A000:3200],mem[$A000:0],60800);
+ end;}
+
+
 {TIME FOR THE MAIN PROGRAM *PS* }
 var
 PlayerR : Sprite;
@@ -451,7 +604,7 @@ Pillz : Sprite;
 a : integer;
 Null : char;
 xx,yy,x,y,ox,oy : word;
-xm,ym,shg : integer;
+xm,ym,bd : integer;
 Left,Right,ClickyStart,endy : Boolean;
 l,k,Buf : byte;
 begin
@@ -462,6 +615,7 @@ begin
         endy:=False;
 	Repeat
                 prefs[0]:=2;
+                initfadeup;
                 LoadScr('pintro.raw');
                 LoadSpr('bonuses.raw',1,Pillz);
                 PutSprnr(Pillz,95,64,3);
@@ -469,6 +623,7 @@ begin
 	        ShowMouse;
         	CursorPac;
                 clickyStart:=False;
+                Fadeup;
                 Repeat
 		Left:=False;
 		MousePoll(x,y,Left,Right);
@@ -496,6 +651,8 @@ begin
 	
         if endy=False then
         begin
+        infup;
+        fadedown;
         MouseHide;
         LoadSpr('sprites.raw',1,PlayerR);
         LoadSpr('sprites.raw',2,PlayerL);
@@ -507,13 +664,18 @@ begin
         LoadScrnp('play.raw');
         Move(Mem[MCGA:0],VScreenMCGA^,64000);
         DrawLev('Pac.lev',Wallz,Cornerz,Pillz);
-        
+        for bd:=1 to numbad do
+          begin
+          bad[bd].yy:=(bad[bd].sx-1)*20;
+          bad[bd].xx:=(bad[bd].sy-1)*20;
+          end;
         ox:=100;
         oy:=160;
         xx:=100;
         yy:=160;
         PutSpr(PlayerR,xx,yy,0);
         Buf:=0;
+        fadeup;
         Repeat
 	       begin
                 k:=ReadController;
@@ -521,6 +683,13 @@ begin
                 l:=l+1;
                 if (Checkmove(xx,yy,xm,ym)=True) then
                 begin xx:=xx+xm;yy:=yy+ym;end;
+
+                for bd:=1 to numbad do
+                begin
+                   if bad[bd].xx<>bad[bd].ox then PutSpr(Baddy,bad[bd].xx,bad[bd].yy,1);
+                   bad[bd].ox:=bad[bd].xx;
+                   bad[bd].oy:=bad[bd].yy;
+                end;
 
                 if ((ox<>xx) or (oy<>yy)) then
                   begin
@@ -565,7 +734,9 @@ begin
 
         Until (k=1) or (NoPills<1);
         end;
-
+{        Fillchar(Mem[$A000:0000],64000,1);}
+{        Scrollup;}
+		Fadedown;
         Until endy=True;
 
         MouseHide;
