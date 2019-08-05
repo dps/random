@@ -1,5 +1,6 @@
 {PACCY - PacMan Clone David Singleton 1995}
-Uses Crt;
+{$X+}
+Uses Crt,Graphics;
 type
 	Screen256 = ARRAY[0..199] OF ARRAY[0..319] OF Byte;
         Pal = Array[0..767] of byte;
@@ -10,7 +11,6 @@ type
         end;
 
 var
-	BefLPut : Array[0..19] of Array[0..19] of Byte;
         Level : Array[0..16] of Array[0..9] of Char;
         Pills : Array[0..16] of Array[0..19] of Char;
 	Prefs : Array[0..4] of Byte;
@@ -170,19 +170,13 @@ Procedure PutSpr(Pl : Sprite;x,y,frame : integer);
 var
 	a,b : integer;
 begin
+       Vwait;
         for b:=0 to 19 do
         begin
         	for a:=0 to 19 do
                 begin
-                        BefLPut[b,a]:=Mem[$A000:(x+a)+((y+b)*320)];
-                end;
-        end;
-        Vwait;
-        for b:=0 to 19 do
-        begin
-        	for a:=0 to 19 do
-                begin
-                	if Pl[frame,b,a]<>0 then Mem[$A000:(x+a)+((y+b)*320)]:=Pl[frame,b,a];
+                	if Pl[frame,b,a]<>0 then Mem[$A000:(x+a)+((y+b)*320)]:=Pl[frame,b,a]
+                    else Mem[$A000:(x+a)+((y+b)*320)]:=VScreenMCGA^[(x+a)+((y+b)*320)+1];
                 end;
         end;
 end;
@@ -195,12 +189,12 @@ begin
         begin
         	for a:=0 to 19 do
                 begin
-                	if Pl[frame,b,a]<>0 then Mem[$A000:(x+a)+((y+b)*320)]:=Pl[frame,b,a];
+                	if Pl[frame,b,a]<>0 then Mem[$A000:(x+a)+((y+b)*320)]:=Pl[frame,b,a]; 
                 end;
         end;
 end;
 
-Procedure ClrSpr(x,y: integer);
+Procedure PutBack(x,y : integer);
 var
 	a,b : integer;
 begin
@@ -208,23 +202,61 @@ begin
         begin
         	for a:=0 to 19 do
                 begin
-        		Mem[$A000:(x+a)+((y+b)*320)]:=BefLPut[b,a];
+                	Mem[$A000:(x+a)+((y+b)*320)]:=VScreenMCGA^[(x+a)+((y+b)*320)+1];
                 end;
         end;
 end;
-
-Procedure ClrSprs(x,y: integer);
+Procedure ClrSpr(xx,yy,ox,oy: integer);
 var
-	a,b : integer;
+	a,b,xdif,ydif : integer;
 begin
-        for b:=0 to 19 do
+     if xx<>ox then 
+     begin
+        xdif:=xx-ox;
+        if xdif<0 then
+         begin
+         
+          for a:=0 to abs(xdif)-1 do
+           for b:=0 to 19 do
+            Mem[$A000:(xx+20+a)+((oy+b)*320)]:=VScreenMCGA^[(xx+20+a)+((oy+b)*320)+1];
+         end
+        else
+         begin
+         
+         for a:=0 to abs(xdif) do
+           for b:=0 to 19 do
+            Mem[$A000:(ox+a)+((oy+b)*320)]:=VScreenMCGA^[(ox+a)+((oy+b)*320)+1];
+         end;
+     end;
+if yy<>oy then 
+     begin
+        ydif:=yy-oy;
+        if ydif<0 then
+         begin
+         
+          for a:=0 to 19 do
+           for b:=0 to abs(ydif)-1 do
+            Mem[$A000:(ox+a)+((yy+20+b)*320)]:=VScreenMCGA^[(ox+a)+((yy+20+b)*320)+1];
+         end
+        else
+         begin
+         
+         for a:=0 to 19 do
+           for b:=0 to abs(ydif)-1 do
+            Mem[$A000:(xx+a)+((oy+b)*320)]:=VScreenMCGA^[(xx+a)+((oy+b)*320)+1];
+         end;
+     end;
+{        for b:=0 to 19 do
         begin
         	for a:=0 to 19 do
                 begin
         		Mem[$A000:(x+a)+((y+b)*320)]:=BefLPut[b,a];
                 end;
-        end;
+
+        end;}
 end;
+
+
 
 
 Procedure DrawLev(name : string;s,c,p : Sprite);
@@ -308,7 +340,7 @@ end;
 Procedure SetText;
 begin
      asm        MOV AH,00
-                MOV AL,02
+                MOV AL,03
                 INT $10
      end;
 end;
@@ -399,8 +431,8 @@ begin
                 CheckMove:=False;
 		if (Level[(xx+xm) div 20,(yy+ym) div 20]=' ') then
 		if (Level[(xx+19+xm) div 20,(yy+19+ym) div 20]=' ') then 
-                if (Level[(xx+19+xm) div 20,(yy+ym) div 20]=' ') then
-                if (Level[(xx+xm) div 20,(yy+19+ym) div 20]=' ') then
+        if (Level[(xx+19+xm) div 20,(yy+ym) div 20]=' ') then
+        if (Level[(xx+xm) div 20,(yy+19+ym) div 20]=' ') then
                 CheckMove:=True
                 
 end;
@@ -419,15 +451,17 @@ Pillz : Sprite;
 a : integer;
 Null : char;
 xx,yy,x,y,ox,oy : word;
-xm,ym : integer;
+xm,ym,shg : integer;
 Left,Right,ClickyStart,endy : Boolean;
 l,k,Buf : byte;
 begin
+    SetupVScreenMCGA;
         Prefs[0]:=2; {Controller - Mouse}
 	TextyStuff;
 	SetGraph;
         endy:=False;
 	Repeat
+                prefs[0]:=2;
                 LoadScr('pintro.raw');
                 LoadSpr('bonuses.raw',1,Pillz);
                 PutSprnr(Pillz,95,64,3);
@@ -439,9 +473,19 @@ begin
 		Left:=False;
 		MousePoll(x,y,Left,Right);
                 x:=x div 2;
+                if port[$60]=159 then Clickystart:=true;
+
+                if port[$60]=178 then 
+				begin Prefs[0]:=2;PutSprnr(Pillz,95,64,3);PutSprnr(Pillz,95,89,2);end;
+
+                if port[$60]=165 then 
+				begin Prefs[0]:=1;PutSprnr(Pillz,95,64,2);PutSprnr(Pillz,95,89,3);end;
+
+                if port[$60]=144 then endy:=true;
+
                 If Left=True then
 		begin
-                 if (((x>89) and (x<231)) and ((y>125) and (y<164))) then ClickyStart:=true;
+                 if ((((x>89) and (x<231)) and ((y>125) and (y<164)))) then ClickyStart:=true;
                  if (((x>115) and (x<201)) and ((y>64) and (y<85))) then 
 		 begin Prefs[0]:=2;PutSprnr(Pillz,95,64,3);PutSprnr(Pillz,95,89,2);end;
                  if (((x>115) and (x<201)) and ((y>89) and (y<110))) then 
@@ -461,7 +505,9 @@ begin
         LoadSpr('sprites.raw',6,Wallz);
         LoadSpr('sprites.raw',7,Cornerz);
         LoadScrnp('play.raw');
+        Move(Mem[MCGA:0],VScreenMCGA^,64000);
         DrawLev('Pac.lev',Wallz,Cornerz,Pillz);
+        
         ox:=100;
         oy:=160;
         xx:=100;
@@ -478,46 +524,52 @@ begin
 
                 if ((ox<>xx) or (oy<>yy)) then
                   begin
-                   ClrSpr(ox,oy);
+                   
                    if ((ox div 20)<>(xx div 20)) or ((oy div 20)<>(yy div 20)) then
                    begin
-                     if Pills[xx div 20,yy div 20]='.' then
+                     if Pills[(xx) div 20,(yy) div 20]='.' then
                       begin
                         Sound(5000);
                         NoPills:=NoPills-1;
-                        Pills[xx div 20,yy div 20]:=' ';
-                        PutSpr(Pillz,(xx div 20)*20,(yy div 20)*20,1);
+                        Pills[(xx) div 20,(yy) div 20]:=' ';
                         NoSound;
 		      end;
                      if Pills[xx div 20,yy div 20]='@' then
                       begin
-                        Sound(1000);
+                               Sound(1000);
+                        delay(5);
                         Pills[xx div 20,yy div 20]:=' ';
-                        PutSpr(Pillz,(xx div 20)*20,(yy div 20)*20,3);
                         NoSound;
                       end;
                    end;
-
+           
 		   if xm<0 then PutSpr(PlayerL,xx,yy,(l div 4) mod 4);
 		   IF XM>0 then PutSpr(PlayerR,xx,yy,(l div 4) mod 4);
-                   if ym>0 then PutSpr(PlayerD,xx,yy,(l div 4) mod 4);
+           if ym>0 then PutSpr(PlayerD,xx,yy,(l div 4) mod 4);
 		   if ym<0 then PutSpr(PlayerU,xx,yy,(l div 4) mod 4);
-		  Vwait;
+           ClrSpr(xx,yy,ox,oy);
+		  {Vwait;}
                   ox:=xx;
                   oy:=yy;
                   end;
 
-		 if ((k=77) or (Buf=77)) and (CheckMove(xx,yy,2,0)=True) then BEGIN xm:=2; ym:=0; end;
+                 if ((xx mod 20)=0) and ((yy mod 20)=0) then
+                 begin
+		         if ((k=77) or (Buf=77)) and (CheckMove(xx,yy,2,0)=True) then BEGIN xm:=2; ym:=0; end;
                  if ((k=75) or (Buf=75)) and (CheckMove(xx,yy,-2,0)=True) then BEGIN xm:=-2; ym:=0; end;
                  if ((k=80) or (Buf=80)) and (CheckMove(xx,yy,0,2)=True) then BEGIN xm:=0; ym:=2; end;
                  if ((k=72) or (Buf=72)) and (CheckMove(xx,yy,0,-2)=True) then BEGIN xm:=0; ym:=-2; end; 
+                 end;
         	end;
+
+
         Until (k=1) or (NoPills<1);
         end;
 
         Until endy=True;
 
         MouseHide;
+    TrashVScreenMCGA;
 	SetText;
 	Writeln('See ya!');
 end.
